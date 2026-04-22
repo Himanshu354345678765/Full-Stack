@@ -1,19 +1,13 @@
-const sqlite3 = require("sqlite3").verbose();
 const path = require("path");
+const Datastore = require("nedb-promises");
 
-const dbPath = path.join(__dirname, "..", "database.sqlite");
-const db = new sqlite3.Database(dbPath);
-
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+const dbPath = path.join(__dirname, "..", "database.json");
+const db = Datastore.create({
+  filename: dbPath,
+  autoload: true,
+  timestampData: true,
 });
+
+db.ensureIndex({ fieldName: "email", unique: true });
 
 module.exports = db;

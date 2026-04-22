@@ -43,78 +43,75 @@ app.post("/api/auth/signup", async (req, res) => {
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
+    const normalizedEmail = email.trim().toLowerCase();
+    const existingUser = await db.findOne({ email: normalizedEmail });
 
-    db.run(
-      "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
-      [name.trim(), email.trim().toLowerCase(), hashedPassword],
-      function onInsert(err) {
-        if (err) {
-          if (err.message.includes("UNIQUE")) {
-            return res.status(409).json({ message: "Email already exists" });
-          }
-          return res.status(500).json({ message: "Could not create user" });
-        }
+    if (existingUser) {
+      return res.status(409).json({ message: "Email already exists" });
+    }
 
-        const token = jwt.sign({ userId: this.lastID, email }, JWT_SECRET, { expiresIn: "7d" });
+    const createdUser = await db.insert({
+      id: Date.now().toString(),
+      name: name.trim(),
+      email: normalizedEmail,
+      password: hashedPassword,
+      created_at: new Date().toISOString(),
+    });
 
-        res.cookie("token", token, {
-          httpOnly: true,
-          sameSite: "lax",
-          secure: process.env.NODE_ENV === "production",
-          maxAge: 7 * 24 * 60 * 60 * 1000,
-        });
+    const token = jwt.sign({ userId: createdUser.id, email: createdUser.email }, JWT_SECRET, { expiresIn: "7d" });
 
-        return res.status(201).json({
-          message: "Signup successful",
-          user: { id: this.lastID, name, email: email.trim().toLowerCase() },
-        });
-      }
-    );
+    res.cookie("token", token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.status(201).json({
+      message: "Signup successful",
+      user: { id: createdUser.id, name: createdUser.name, email: createdUser.email },
+    });
   } catch (error) {
     return res.status(500).json({ message: "Server error" });
   }
 });
 
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ message: "Email and password are required" });
   }
 
-  db.get(
-    "SELECT id, name, email, password FROM users WHERE email = ?",
-    [email.trim().toLowerCase()],
-    async (err, user) => {
-      if (err) {
-        return res.status(500).json({ message: "Server error" });
-      }
+  try {
+    const user = await db.findOne({ email: email.trim().toLowerCase() });
 
-      if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-
-      const validPassword = await bcrypt.compare(password, user.password);
-
-      if (!validPassword) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-
-      const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: "7d" });
-
-      res.cookie("token", token, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
-
-      return res.json({
-        message: "Login successful",
-        user: { id: user.id, name: user.name, email: user.email },
-      });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
     }
-  );
+
+    const validPassword = await bcrypt.compare(password, user.password);
+
+    if (!validPassword) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
+    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: "7d" });
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({
+      message: "Login successful",
+      user: { id: user.id, name: user.name, email: user.email },
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" });
+  }
 });
 
 app.post("/api/auth/logout", (_req, res) => {
@@ -123,17 +120,22 @@ app.post("/api/auth/logout", (_req, res) => {
 });
 
 app.get("/api/auth/me", authMiddleware, (req, res) => {
-  db.get("SELECT id, name, email, created_at FROM users WHERE id = ?", [req.user.userId], (err, user) => {
-    if (err) {
-      return res.status(500).json({ message: "Server error" });
-    }
-
+  db.findOne({ id: req.user.userId })
+    .then((user) => {
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    return res.json({ user });
-  });
+      return res.json({
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          created_at: user.created_at,
+        },
+      });
+    })
+    .catch(() => res.status(500).json({ message: "Server error" }));
 });
 
 app.get("*", (_req, res) => {

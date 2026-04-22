@@ -3,12 +3,12 @@
 A complete full-stack website with:
 - User signup/login authentication
 - Backend API using Express.js
-- Database integration using SQLite
+- Database integration using NeDB (file database)
 - Ready-to-deploy setup
 
 ## Tech Stack
 - Backend: Node.js, Express.js
-- Database: SQLite
+- Database: NeDB (persistent file-based database)
 - Auth: JWT + HttpOnly cookies + bcrypt password hashing
 - Frontend: HTML, CSS, JavaScript (served by Express)
 
@@ -18,11 +18,11 @@ A complete full-stack website with:
 - Protected route to fetch current logged-in user
 - Logout endpoint
 - Password hashing before storage
-- User data persisted in SQLite database
+- User data persisted in a local database file
 
 ## Project Structure
 - `src/server.js` - API server and auth routes
-- `src/db.js` - SQLite initialization and table setup
+- `src/db.js` - Database setup and indexes
 - `public/index.html` - Frontend UI
 - `public/app.js` - Frontend API integration
 - `public/styles.css` - Styling
